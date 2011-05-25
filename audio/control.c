@@ -84,7 +84,6 @@ X - Excluded
 
 #include "log.h"
 #include "error.h"
-#include "uinput.h"
 #include "adapter.h"
 #include "../src/device.h"
 #include "device.h"
@@ -95,6 +94,7 @@ X - Excluded
 #include "glib-helper.h"
 #include "btio.h"
 #include "dbus-common.h"
+#include "control_uinput.h"
 
 #define AVCTP_PSM 23
 
@@ -123,22 +123,6 @@ X - Excluded
 
 /* subunits of interest */
 #define SUBUNIT_PANEL		0x09
-
-/* operands in passthrough commands */
-#define VOL_UP_OP		0x41
-#define VOL_DOWN_OP		0x42
-#define MUTE_OP			0x43
-#define PLAY_OP			0x44
-#define STOP_OP			0x45
-#define PAUSE_OP		0x46
-#define RECORD_OP		0x47
-#define REWIND_OP		0x48
-#define FAST_FORWARD_OP		0x49
-#define EJECT_OP		0x4a
-#define FORWARD_OP		0x4b
-#define BACKWARD_OP		0x4c
-
-#define QUIRK_NO_RELEASE	1 << 0
 
 static DBusConnection *connection = NULL;
 
@@ -199,38 +183,6 @@ struct avctp_server {
 	GIOChannel *io;
 	uint32_t tg_record_id;
 	uint32_t ct_record_id;
-};
-
-struct control {
-	struct audio_device *dev;
-
-	avctp_state_t state;
-
-	int uinput;
-
-	GIOChannel *io;
-	guint io_id;
-
-	uint16_t mtu;
-
-	gboolean target;
-
-	uint8_t key_quirks[256];
-};
-
-static struct {
-	const char *name;
-	uint8_t avrcp;
-	uint16_t uinput;
-} key_map[] = {
-	{ "PLAY",		PLAY_OP,		KEY_PLAYCD },
-	{ "STOP",		STOP_OP,		KEY_STOPCD },
-	{ "PAUSE",		PAUSE_OP,		KEY_PAUSECD },
-	{ "FORWARD",		FORWARD_OP,		KEY_NEXTSONG },
-	{ "BACKWARD",		BACKWARD_OP,		KEY_PREVIOUSSONG },
-	{ "REWIND",		REWIND_OP,		KEY_REWIND },
-	{ "FAST FORWARD",	FAST_FORWARD_OP,	KEY_FASTFORWARD },
-	{ NULL }
 };
 
 static GSList *avctp_callbacks = NULL;
@@ -365,74 +317,11 @@ static sdp_record_t *avrcp_tg_record(void)
 	return record;
 }
 
-static int send_event(int fd, uint16_t type, uint16_t code, int32_t value)
-{
-	struct uinput_event event;
-
-	memset(&event, 0, sizeof(event));
-	event.type	= type;
-	event.code	= code;
-	event.value	= value;
-
-	return write(fd, &event, sizeof(event));
-}
-
-static void send_key(int fd, uint16_t key, int pressed)
-{
-	if (fd < 0)
-		return;
-
-	send_event(fd, EV_KEY, key, pressed);
-	send_event(fd, EV_SYN, SYN_REPORT, 0);
-}
-
 static void handle_panel_passthrough(struct control *control,
 					const unsigned char *operands,
 					int operand_count)
 {
-	const char *status;
-	int pressed, i;
-
-	if (operand_count == 0)
-		return;
-
-	if (operands[0] & 0x80) {
-		status = "released";
-		pressed = 0;
-	} else {
-		status = "pressed";
-		pressed = 1;
-	}
-
-	for (i = 0; key_map[i].name != NULL; i++) {
-		uint8_t key_quirks;
-
-		if ((operands[0] & 0x7F) != key_map[i].avrcp)
-			continue;
-
-		DBG("AVRCP: %s %s", key_map[i].name, status);
-
-		key_quirks = control->key_quirks[key_map[i].avrcp];
-
-		if (key_quirks & QUIRK_NO_RELEASE) {
-			if (!pressed) {
-				DBG("AVRCP: Ignoring release");
-				break;
-			}
-
-			DBG("AVRCP: treating key press as press + release");
-			send_key(control->uinput, key_map[i].uinput, 1);
-			send_key(control->uinput, key_map[i].uinput, 0);
-			break;
-		}
-
-		send_key(control->uinput, key_map[i].uinput, pressed);
-		break;
-	}
-
-	if (key_map[i].name == NULL)
-		DBG("AVRCP: unknown button 0x%02X %s",
-						operands[0] & 0x7F, status);
+	uinput_handle_panel_passthrough(control, operands, operand_count);
 }
 
 static void avctp_disconnected(struct audio_device *dev)
@@ -457,16 +346,7 @@ static void avctp_disconnected(struct audio_device *dev)
 								control);
 	}
 
-	if (control->uinput >= 0) {
-		char address[18];
-
-		ba2str(&dev->dst, address);
-		DBG("AVRCP: closing uinput for %s", address);
-
-		ioctl(control->uinput, UI_DEV_DESTROY);
-		close(control->uinput);
-		control->uinput = -1;
-	}
+	uinput_disconnect(control, dev);
 }
 
 static void avctp_set_state(struct control *control, avctp_state_t new_state)
@@ -622,85 +502,6 @@ failed:
 	return FALSE;
 }
 
-static int uinput_create(char *name)
-{
-	struct uinput_dev dev;
-	int fd, err, i;
-
-	fd = open("/dev/uinput", O_RDWR);
-	if (fd < 0) {
-		fd = open("/dev/input/uinput", O_RDWR);
-		if (fd < 0) {
-			fd = open("/dev/misc/uinput", O_RDWR);
-			if (fd < 0) {
-				err = errno;
-				error("Can't open input device: %s (%d)",
-							strerror(err), err);
-				return -err;
-			}
-		}
-	}
-
-	memset(&dev, 0, sizeof(dev));
-	if (name)
-		strncpy(dev.name, name, UINPUT_MAX_NAME_SIZE - 1);
-
-	dev.id.bustype = BUS_BLUETOOTH;
-	dev.id.vendor  = 0x0000;
-	dev.id.product = 0x0000;
-	dev.id.version = 0x0000;
-
-	if (write(fd, &dev, sizeof(dev)) < 0) {
-		err = errno;
-		error("Can't write device information: %s (%d)",
-						strerror(err), err);
-		close(fd);
-		errno = err;
-		return -err;
-	}
-
-	ioctl(fd, UI_SET_EVBIT, EV_KEY);
-	ioctl(fd, UI_SET_EVBIT, EV_REL);
-	ioctl(fd, UI_SET_EVBIT, EV_REP);
-	ioctl(fd, UI_SET_EVBIT, EV_SYN);
-
-	for (i = 0; key_map[i].name != NULL; i++)
-		ioctl(fd, UI_SET_KEYBIT, key_map[i].uinput);
-
-	if (ioctl(fd, UI_DEV_CREATE, NULL) < 0) {
-		err = errno;
-		error("Can't create uinput device: %s (%d)",
-						strerror(err), err);
-		close(fd);
-		errno = err;
-		return -err;
-	}
-
-	return fd;
-}
-
-static void init_uinput(struct control *control)
-{
-	struct audio_device *dev = control->dev;
-	char address[18], name[248 + 1];
-
-	device_get_name(dev->btd_dev, name, sizeof(name));
-	if (g_str_equal(name, "Nokia CK-20W")) {
-		control->key_quirks[FORWARD_OP] |= QUIRK_NO_RELEASE;
-		control->key_quirks[BACKWARD_OP] |= QUIRK_NO_RELEASE;
-		control->key_quirks[PLAY_OP] |= QUIRK_NO_RELEASE;
-		control->key_quirks[PAUSE_OP] |= QUIRK_NO_RELEASE;
-	}
-
-	ba2str(&dev->dst, address);
-
-	control->uinput = uinput_create(address);
-	if (control->uinput < 0)
-		error("AVRCP: failed to init uinput for %s", address);
-	else
-		DBG("AVRCP: uinput initialized for %s", address);
-}
-
 static void avctp_connect_cb(GIOChannel *chan, GError *err, gpointer data)
 {
 	struct control *control = data;
@@ -730,7 +531,7 @@ static void avctp_connect_cb(GIOChannel *chan, GError *err, gpointer data)
 	if (!control->io)
 		control->io = g_io_channel_ref(chan);
 
-	init_uinput(control);
+	uinput_connect(control);
 
 	avctp_set_state(control, AVCTP_STATE_CONNECTED);
 	control->mtu = imtu;

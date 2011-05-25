@@ -30,6 +30,23 @@ typedef enum {
 	AVCTP_STATE_CONNECTED
 } avctp_state_t;
 
+struct control {
+	struct audio_device *dev;
+
+	avctp_state_t state;
+
+	int uinput;
+
+	GIOChannel *io;
+	guint io_id;
+
+	uint16_t mtu;
+
+	gboolean target;
+
+	uint8_t key_quirks[256];
+};
+
 typedef void (*avctp_state_cb) (struct audio_device *dev,
 				avctp_state_t old_state,
 				avctp_state_t new_state,

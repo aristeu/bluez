@@ -21,6 +21,43 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
  */
+#if 0
+Feature Support in Support in			CT	TG
+1 Connection establishment for control		M	O
+2 Release connection for control		M	M
+3 Connection establishment for browsing		C6	C7
+4 Release connection for browsing		C6	C6
+5 AV/C Info commands				O	M
+6 Category 1: Player/Recorder			C3	C3
+7 Category 2: Monitor/Amplifier			C3	C3
+8 Category 3: Tuner				C3	C3
+9 Category 4: Menu				C3	C3
+10 Capabilities					O	C1
+11 Player Application Settings			O	O
+12 Metadata Attributes for Current Media Item 	O	C1
+13 Notifications				C2	C2
+14 Continuation					C2	C2
+15 Basic Group Navigation			O	O
+16 Absolute Volume				C4	C4
+17 Media Player Selection			O	C5
+	17.1  Supports Multiple Players		O	O
+18    Browsing 					O	O
+	18.1  Database Aware Players 		O	O
+19 Search					O	O
+20 Now Playing					C6	C6
+	20.1 - Playable Folders			O	O
+21 Error Response				X	C8
+
+C1 - Mandatory if Target supports Category 1 or optional otherwise
+C2 - Mandatory if device supports Metadata Attributes for Current Media Item or optional otherwise
+C3 - Mandatory to support at least one Category
+C4 - Mandatory if Category 2 supported, excluded otherwise
+C5 - Mandatory if Target supports Category 1 or Category 3 or optional otherwise
+C6 - Mandatory if Browsing (item 18) is supported, optional otherwise
+C7 - Optional if Browsing (item 18) is supported, excluded otherwise
+C8 - Mandatory if any of items 10 - 20.1 are supported, excluded otherwise
+X - Excluded
+#endif
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>

@@ -321,12 +321,15 @@ static void handle_panel_passthrough(struct control *control,
 					const unsigned char *operands,
 					int operand_count)
 {
-	uinput_handle_panel_passthrough(control, operands, operand_count);
+	struct control_plugin *cplugin = control->plugin;
+
+	cplugin->handle_panel_passthrough(control, operands, operand_count);
 }
 
 static void avctp_disconnected(struct audio_device *dev)
 {
 	struct control *control = dev->control;
+	struct control_plugin *cplugin = control->plugin;
 
 	if (!control)
 		return;
@@ -346,7 +349,7 @@ static void avctp_disconnected(struct audio_device *dev)
 								control);
 	}
 
-	uinput_disconnect(control, dev);
+	cplugin->disconnect(control, dev);
 }
 
 static void avctp_set_state(struct control *control, avctp_state_t new_state)
@@ -505,6 +508,7 @@ failed:
 static void avctp_connect_cb(GIOChannel *chan, GError *err, gpointer data)
 {
 	struct control *control = data;
+	struct control_plugin *cplugin = control->plugin;
 	char address[18];
 	uint16_t imtu;
 	GError *gerr = NULL;
@@ -531,7 +535,7 @@ static void avctp_connect_cb(GIOChannel *chan, GError *err, gpointer data)
 	if (!control->io)
 		control->io = g_io_channel_ref(chan);
 
-	uinput_connect(control);
+	cplugin->connect(control);
 
 	avctp_set_state(control, AVCTP_STATE_CONNECTED);
 	control->mtu = imtu;
@@ -981,7 +985,7 @@ struct control *control_init(struct audio_device *dev, uint16_t uuid16)
 	control = g_new0(struct control, 1);
 	control->dev = dev;
 	control->state = AVCTP_STATE_DISCONNECTED;
-	control->uinput = -1;
+	control->plugin = &uinput_control_plugin;
 
 	if (uuid16 == AV_REMOTE_TARGET_SVCLASS_ID)
 		control->target = TRUE;

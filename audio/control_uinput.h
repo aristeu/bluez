@@ -15,9 +15,5 @@
 
 #define QUIRK_NO_RELEASE	1 << 0
 
-void uinput_connect(struct control *control);
-void uinput_handle_panel_passthrough(struct control *control,
-					const unsigned char *operands,
-					int operand_count);
-void uinput_disconnect(struct control *control, struct audio_device *dev);
+extern struct control_plugin uinput_control_plugin;
 #endif	/* __CONTROL_UINPUT_H */

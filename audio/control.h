@@ -30,12 +30,11 @@ typedef enum {
 	AVCTP_STATE_CONNECTED
 } avctp_state_t;
 
+struct control_plugin;
 struct control {
 	struct audio_device *dev;
 
 	avctp_state_t state;
-
-	int uinput;
 
 	GIOChannel *io;
 	guint io_id;
@@ -45,6 +44,20 @@ struct control {
 	gboolean target;
 
 	uint8_t key_quirks[256];
+
+	struct control_plugin *plugin;
+	void *plugin_priv;
+};
+
+struct control_plugin
+{
+	char *name;
+
+	void (*connect)(struct control *control);
+	void (*handle_panel_passthrough)(struct control *control,
+					const unsigned char *operands,
+					int operand_count);
+	void (*disconnect)(struct control *control, struct audio_device *dev);
 };
 
 typedef void (*avctp_state_cb) (struct audio_device *dev,

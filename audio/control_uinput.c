@@ -25,6 +25,10 @@
 #include "uinput.h"
 #include "control_uinput.h"
 
+struct uinput_priv {
+	int fd;
+};
+
 static struct {
 	const char *name;
 	uint8_t avrcp;
@@ -61,12 +65,13 @@ static void send_key(int fd, uint16_t key, int pressed)
 	send_event(fd, EV_SYN, SYN_REPORT, 0);
 }
 
-void uinput_handle_panel_passthrough(struct control *control,
+static void uinput_handle_panel_passthrough(struct control *control,
 					const unsigned char *operands,
 					int operand_count)
 {
 	const char *status;
-	int pressed, i;
+	struct uinput_priv *priv = control->plugin_priv;
+	int pressed, i, fd = priv->fd;
 
 	if (operand_count == 0)
 		return;
@@ -96,12 +101,12 @@ void uinput_handle_panel_passthrough(struct control *control,
 			}
 
 			DBG("AVRCP: treating key press as press + release");
-			send_key(control->uinput, key_map[i].uinput, 1);
-			send_key(control->uinput, key_map[i].uinput, 0);
+			send_key(fd, key_map[i].uinput, 1);
+			send_key(fd, key_map[i].uinput, 0);
 			break;
 		}
 
-		send_key(control->uinput, key_map[i].uinput, pressed);
+		send_key(fd, key_map[i].uinput, pressed);
 		break;
 	}
 
@@ -110,18 +115,22 @@ void uinput_handle_panel_passthrough(struct control *control,
 						operands[0] & 0x7F, status);
 }
 
-void uinput_disconnect(struct control *control, struct audio_device *dev)
+static void uinput_disconnect(struct control *control, struct audio_device *dev)
 {
-	if (control->uinput >= 0) {
+	struct uinput_priv *priv = control->plugin_priv;
+	int fd = priv->fd;
+
+	if (fd >= 0) {
 		char address[18];
 
 		ba2str(&dev->dst, address);
 		DBG("AVRCP: closing uinput for %s", address);
 
-		ioctl(control->uinput, UI_DEV_DESTROY);
-		close(control->uinput);
-		control->uinput = -1;
+		ioctl(fd, UI_DEV_DESTROY);
+		close(fd);
 	}
+	free(control->plugin_priv);
+	control->plugin_priv = NULL;
 }
 
 static int uinput_create(char *name)
@@ -181,10 +190,17 @@ static int uinput_create(char *name)
 	return fd;
 }
 
-void uinput_connect(struct control *control)
+static void uinput_connect(struct control *control)
 {
 	struct audio_device *dev = control->dev;
+	struct uinput_priv *priv;
 	char address[18], name[248 + 1];
+	int fd;
+
+	priv = malloc(sizeof(*dev));
+	if (priv == NULL)
+		error("AVRCP: unable to allocate memory");
+	memset(priv, 0, sizeof(*priv));
 
 	device_get_name(dev->btd_dev, name, sizeof(name));
 	if (g_str_equal(name, "Nokia CK-20W")) {
@@ -196,10 +212,19 @@ void uinput_connect(struct control *control)
 
 	ba2str(&dev->dst, address);
 
-	control->uinput = uinput_create(address);
-	if (control->uinput < 0)
+	fd = uinput_create(address);
+	if (fd < 0)
 		error("AVRCP: failed to init uinput for %s", address);
 	else
 		DBG("AVRCP: uinput initialized for %s", address);
+	control->plugin_priv = priv;
+	priv->fd = fd;
 }
+
+struct control_plugin uinput_control_plugin = {
+	.name = "uinput",
+	.connect = uinput_connect,
+	.handle_panel_passthrough = uinput_handle_panel_passthrough,
+	.disconnect = uinput_disconnect,
+};
 

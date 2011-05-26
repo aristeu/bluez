@@ -330,6 +330,7 @@ static void avctp_disconnected(struct audio_device *dev)
 {
 	struct control *control = dev->control;
 	struct control_plugin *cplugin = control->plugin;
+	char name[248 + 1];
 
 	if (!control)
 		return;
@@ -347,6 +348,14 @@ static void avctp_disconnected(struct audio_device *dev)
 		if (control->state == AVCTP_STATE_CONNECTING)
 			audio_device_cancel_authorization(dev, auth_cb,
 								control);
+	}
+
+	device_get_name(dev->btd_dev, name, sizeof(name));
+	if (g_str_equal(name, "Nokia CK-20W")) {
+		control->key_quirks[FORWARD_OP] |= QUIRK_NO_RELEASE;
+		control->key_quirks[BACKWARD_OP] |= QUIRK_NO_RELEASE;
+		control->key_quirks[PLAY_OP] |= QUIRK_NO_RELEASE;
+		control->key_quirks[PAUSE_OP] |= QUIRK_NO_RELEASE;
 	}
 
 	cplugin->disconnect(control, dev);

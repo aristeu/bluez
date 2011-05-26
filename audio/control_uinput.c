@@ -194,21 +194,13 @@ static void uinput_connect(struct control *control)
 {
 	struct audio_device *dev = control->dev;
 	struct uinput_priv *priv;
-	char address[18], name[248 + 1];
+	char address[18];
 	int fd;
 
 	priv = malloc(sizeof(*dev));
 	if (priv == NULL)
 		error("AVRCP: unable to allocate memory");
 	memset(priv, 0, sizeof(*priv));
-
-	device_get_name(dev->btd_dev, name, sizeof(name));
-	if (g_str_equal(name, "Nokia CK-20W")) {
-		control->key_quirks[FORWARD_OP] |= QUIRK_NO_RELEASE;
-		control->key_quirks[BACKWARD_OP] |= QUIRK_NO_RELEASE;
-		control->key_quirks[PLAY_OP] |= QUIRK_NO_RELEASE;
-		control->key_quirks[PAUSE_OP] |= QUIRK_NO_RELEASE;
-	}
 
 	ba2str(&dev->dst, address);
 

@@ -213,8 +213,23 @@ static void uinput_connect(struct control *control)
 	priv->fd = fd;
 }
 
+static int uinput_init(struct control *control, GKeyFile *config)
+{
+	struct uinput_priv *priv;
+
+	priv = g_new0(struct uinput_priv, 1);
+	if (priv == NULL) {
+		error("uinput: unable to allocate memory");
+		return 1;
+	}
+	control->plugin_priv = priv;
+
+	return 0;
+}
+
 struct control_plugin uinput_control_plugin = {
 	.name = "uinput",
+	.init = uinput_init,
 	.connect = uinput_connect,
 	.handle_panel_passthrough = uinput_handle_panel_passthrough,
 	.disconnect = uinput_disconnect,

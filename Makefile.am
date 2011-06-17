@@ -126,6 +126,7 @@ builtin_sources += audio/main.c \
 			audio/headset.h audio/headset.c \
 			audio/control.h audio/control.c \
 			audio/control_uinput.h audio/control_uinput.c \
+			audio/control_mpd.c \
 			audio/device.h audio/device.c \
 			audio/source.h audio/source.c \
 			audio/sink.h audio/sink.c \
@@ -254,6 +255,7 @@ src_bluetoothd_SOURCES = $(gdbus_sources) $(builtin_sources) \
 			src/event.h src/event.c \
 			src/oob.h src/oob.c src/eir.h src/eir.c
 src_bluetoothd_LDADD = lib/libbluetooth.la @GLIB_LIBS@ @DBUS_LIBS@ \
+							@libmpdclient_LIBS@ \
 							@CAPNG_LIBS@ -ldl -lrt
 src_bluetoothd_LDFLAGS = -Wl,--export-dynamic \
 				-Wl,--version-script=$(srcdir)/src/bluetooth.ver

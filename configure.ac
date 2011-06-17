@@ -57,5 +57,15 @@ if (test "${enable_capng}" = "yes"); then
 	AC_DEFINE(HAVE_CAPNG, 1, [Define to 1 if you have capabilities library.])
 fi
 
+AC_ARG_ENABLE(mpd, AC_HELP_STRING([--enable-mpd],
+		[enabled MPD client support]), [enable_mpd=${enableval}])
+if (test "${enable_mpd}" = "yes"); then
+	PKG_CHECK_MODULES(libmpdclient, libmpdclient, dummy=yes,
+				AC_MSG_ERROR(libmpdclient library is required))
+	AC_SUBST(libmpdclient_CFLAGS)
+	AC_SUBST(libmpdclient_LIBS)
+	AC_DEFINE(HAVE_MPD, 1, [Define to 1 if you have libmpdclient library.])
+fi
+
 AC_OUTPUT(Makefile scripts/bluetooth.rules doc/version.xml
 					src/bluetoothd.8 bluez.pc)

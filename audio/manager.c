@@ -221,7 +221,7 @@ static void handle_uuid(const char *uuidstr, struct audio_device *device)
 		if (device->control)
 			control_update(device, uuid16);
 		else
-			device->control = control_init(device, uuid16);
+			device->control = control_init(device, uuid16, config);
 		if (device->sink && sink_is_active(device))
 			avrcp_connect(device);
 		break;

@@ -127,6 +127,7 @@ struct control_plugin
 {
 	char *name;
 
+	int (*init)(struct control *control, GKeyFile *config);
 	void (*connect)(struct control *control);
 	void (*handle_panel_passthrough)(struct control *control,
 					const unsigned char *operands,
@@ -148,7 +149,7 @@ void avrcp_unregister(const bdaddr_t *src);
 gboolean avrcp_connect(struct audio_device *dev);
 void avrcp_disconnect(struct audio_device *dev);
 
-struct control *control_init(struct audio_device *dev, uint16_t uuid16);
+struct control *control_init(struct audio_device *dev, uint16_t uuid16, GKeyFile *config);
 void control_update(struct audio_device *dev, uint16_t uuid16);
 void control_unregister(struct audio_device *dev);
 gboolean control_is_active(struct audio_device *dev);

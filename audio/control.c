@@ -978,7 +978,7 @@ void control_update(struct audio_device *dev, uint16_t uuid16)
 		control->target = TRUE;
 }
 
-struct control *control_init(struct audio_device *dev, uint16_t uuid16)
+struct control *control_init(struct audio_device *dev, uint16_t uuid16, GKeyFile *config)
 {
 	struct control *control;
 
@@ -995,6 +995,10 @@ struct control *control_init(struct audio_device *dev, uint16_t uuid16)
 	control->dev = dev;
 	control->state = AVCTP_STATE_DISCONNECTED;
 	control->plugin = &uinput_control_plugin;
+	if (control->plugin->init && control->plugin->init(control, config)) {
+		g_free(control);
+		return NULL;
+	}
 
 	if (uuid16 == AV_REMOTE_TARGET_SVCLASS_ID)
 		control->target = TRUE;
